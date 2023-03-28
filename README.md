@@ -21,5 +21,5 @@ Objetivos e funcionalidades que este algoritmo devem desempenhar:
 - Calcular a estimativa de redução do CHI acumulado dada a inserção da chave em um grupo de transferencia de carga automático. 
 
 <h4 align = "center">
-:construciton: Projeto em contrução :construciton: 
+🚧 Projeto em contrução 🚧 
 <h4/>
