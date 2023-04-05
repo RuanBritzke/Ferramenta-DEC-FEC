@@ -18,8 +18,24 @@ Objetivos e funcionalidades que este algoritmo devem desempenhar:
 - Calcular o valor do CHI das chaves do sistema a partir das informações a cima.
 - Calcular o valor do CHI acumulado a jusante das chaves 
 - Calcular a estimativa de redução do CHI acumulado dada a troca de uma chave por religadora.
-- Calcular a estimativa de redução do CHI acumulado dada a inserção da chave em um grupo de transferencia de carga automático. 
+- Calcular a estimativa de redução do CHI acumulado dada a inserção da chave em um grupo de transferencia de carga automático. \
 
-<h4 align = "center">
-🚧 Projeto em contrução 🚧 
-<h4/>
+
+Projeto em contrução :construction:\
+
+Funcionalidades Futuras:
+------------------------
+
+- Estudo geral
+    - redução dec ta
+    - redução dec nf
+
+- Estudo especifico (Chave, Alimentador, SE)
+    Chave:\
+    - Mostrar Ganho NF
+    - Selecionar TA (Ida e volta, somente Ida)
+    - Mostrar Ganho TA (Se FU mais a jusante ou CD)
+
+
+
+
