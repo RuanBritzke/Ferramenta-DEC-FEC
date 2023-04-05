@@ -12,15 +12,20 @@ DF_SUBESTACOES = pd.DataFrame(SUBESTACOES)
 
 DF_REGIONAIS = pd.DataFrame(REGIONAIS)
 
-CAUSAS = pd.read_pickle("base/CAUSAS")
+CAUSAS = pd.read_pickle(
+    "base/CAUSAS", compression={'method': "gzip", 'compresslevel': 1, 'mtime': 1})
 
-RHC = pd.read_pickle("base/RHC")
+RHC = pd.read_pickle(
+    "base/RHC", compression={'method': "gzip", 'compresslevel': 1, 'mtime': 1})
 
-RDC = pd.read_pickle("base/RDC")
+RDC = pd.read_pickle(
+    "base/RDC", compression={'method': "gzip", 'compresslevel': 1, 'mtime': 1})
 
-OCORRENCIAS = pd.read_pickle("base/OCORRENCIAS")
+OCORRENCIAS = pd.read_pickle(
+    "base/OCORRENCIAS", compression={'method': "gzip", 'compresslevel': 1, 'mtime': 1})
 
-SES = pd.read_pickle("base/CODIGOS_SE")
+SES = pd.read_pickle(
+    "base/CODIGOS_SE", compression={'method': "gzip", 'compresslevel': 1, 'mtime': 1})
 
 
 def encontrar_se(entry: str | int, onde="SIGLA_SE"):
@@ -108,7 +113,7 @@ def atualiazar_ocorrencias():
         temp["DATA INICIO"] = temp["DATA INICIO"].apply(lambda x: x.split()[0])
         temp["DATA FIM"] = temp["DATA FIM"].apply(lambda x: x.split()[0])
         OCORRENCIAS = concatenar_df(OCORRENCIAS, temp)
-    OCORRENCIAS.to_pickle('base/OCORRENCIAS')
+    OCORRENCIAS.to_pickle('base/OCORRENCIAS', compression={'method': "gzip", 'compresslevel': 1, 'mtime': 1})
 
 
 def atualizar_relatorio_hierarquico_chaves():
@@ -135,7 +140,7 @@ def atualizar_relatorio_hierarquico_chaves():
     RHC.drop(columns= 2, inplace = True)
     RHC.dropna(axis=0, how="all", inplace=True)
     # Limpa os disjuntores ficticios do RHC da segunda coluna do arquivo csv (importante para evitar bugs)
-    RHC.to_pickle("base/RHC")
+    RHC.to_pickle("base/RHC", compression={'method': "gzip", 'compresslevel': 1, 'mtime': 1})
 
 
 def atualizar_relatorio_de_chaves():
@@ -155,7 +160,7 @@ def atualizar_relatorio_de_chaves():
             temp["Consumidores a jusante"], errors="coerce", downcast="integer"
         )
         RDC = concatenar_df(RDC, temp)
-    RDC.to_pickle("base/RDC")
+    RDC.to_pickle("base/RDC",compression={'method': "gzip", 'compresslevel': 1, 'mtime': 1})
 
 
 def importar_arquivos():

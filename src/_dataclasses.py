@@ -1,3 +1,9 @@
+#---------------------------------------
+# Autor:    Ruan Carlo Weiers Britzke
+# Lotação:  DPEP/DVPE
+# Data:     30/03/2023
+#---------------------------------------
+
 from typing import Literal
 from src._database import (
     pd,
@@ -23,27 +29,39 @@ class TreeNode:
         self.children = list()
 
     def __eq__(self, other):
-        if isinstance(other, TreeNode):
-            return self.data == other.data
+        """
+        Checa se data de dois Nós são iguais
+        """
+        return self.data == other.data
 
     def __lt__(self, other):
-        if isinstance(other, TreeNode):
-            return self.data < other.data
-
-    def __gt(self, other):
-        if isinstance(self, other):
-            return self.data > other.data
+        """
+        Checa se os dados de um Nó é menor que o outro
+        """
+        return self.data < other.data
 
     def __repr__(self) -> str:
+        """
+        Retorna uma representação em string do Nó
+        """
         return f"{self.__class__.__name__}({self.data})"
 
     def __str__(self) -> str:
+        """
+        Retorna uma representação em string dos dados armazenados no nó
+        """
         return f"{self.data}"
 
     def set_data(self, data):
+        """
+        Seta os dados do Nó
+        """
         self.data = data
 
     def set_children(self, *children):
+        """
+        Adiciona nós filhos ao nó
+        """
         for child in children:
             child.parent = self
             assert isinstance(child, TreeNode), f"{child} is not a TreeNode"
@@ -51,95 +69,126 @@ class TreeNode:
             self.children.sort()
 
     def get_children(self):
+        """
+        Retorna a lista de filhos do nó
+        """
         return self.children
 
     def get_degree(self):
+        """
+        Retorna o grau do nó (número de filhos)
+        """
         return len(self.children)
 
     def set_parent(self, parent):
-        assert isinstance(parent, TreeNode), f"{parent} is not a TreeNode"
+        """
+        Seta o nó pai do Nó de referência.
+        """
+
+        assert isinstance(parent, TreeNode) or parent != None, f"{parent} is not a TreeNode"
         parent.set_children(self)
 
     def get_parent(self):
         return self.parent
 
+    @property
     def is_root(self):
-        if self.parent is None:
-            return True
-        return False
+        """
+        Retorna True se Nó é raiz, caso contrario False
+        """
 
+        return self.parent is None
+
+    @property
     def is_leaf(self):
-        if self.children:
-            return False
-        return True
+        """
+        Retorna True se o Nó é folha, caso contrario False
+        """
+        return not self.children
+
 
     def get_level(self):
-        if self.is_root():
+        """
+        Retorna o nível do Nó, 0 caso for raiz.
+        """
+
+        if self.is_root:
             return 0
         return 1 + self.parent.get_level()
 
     def get_root(self):
-        if self.is_root():
-            return self
-        p: TreeNode = self.get_parent()
-        while bool(p.get_parent()):
-            p = p.get_parent()
-        return p
+        """
+        Retorna a raiz da estrutura TreeNode.
+        """
+        node = self
+        while node.parent:
+            node = node.parent
+        return node
 
     def get_heritage(self) -> list:
+        """
+        Retorna uma lista dos ancestrais do Nó. Apartir da raiz até o nó de referência.
+        """
         node = self
         heritage = []
-
-        while not node.is_root():
-            heritage.append(node.parent)
+        while not node.is_root:
+            heritage.insert(0, node.parent)
             node = node.parent
-
         return heritage
 
     def print_tree(self, level = 0) -> None:
+        """
+        Imprime a estrutura hierarquica dos objetos salvos na Árvore.
+        """
         spaces = "|   " * level
         prefix = spaces + "|-- " if level else ""
-        print(prefix + str(self.data))
+        if isinstance(self, Chave):
+            print(prefix + str(self.data) + " " + self.tipo)
+        else:
+            print(prefix + str(self.data))
         if self.children:
             for child in self.children:
                 child.print_tree(level + 1)
 
     def find(self, data):
         """
-        Encontra um nó baseado em seu dado dentro da árvore
+        Encontra um nó baseado em seu dado dentro da árvore. Procura em profundidade primeiro. 
         """
         if self.data == data:
             return self
+            
         for child in self.children:
-            node = child.find(data)
-            if node:
-                return node
+            found = child.find(data)
+            if found:
+                return found
         return None
 
-    def level_order_traversal(self):
+    def bft(self):
         """
-        Retorna todos os Nós a jusante do nó em uma lista
+        Retorna todos os Nós a jusante do nó em uma lista, vasculhando todo o nivel primeiro.
         """
         queue = [self]
         visited = []
         while queue:
-            n = len(queue)
-            while n > 0:
-                node = queue.pop(0)
-                visited.append(node)
-                for i in range(len(node.children)):
-                    queue.append(node.children[i])
-                n -= 1
+            node = queue.pop(0)
+            visited.append(node)
+            queue.extend(node.children)
         return visited
 
-    def depth_first_traversal(self, visited = []):
-        if self in visited:
-            return visited
+
+    def dft(self, visited = None):
+        """
+        Retorna todos os nó a jusante do nó de referência, percorrendo toda a profundidade do ramo antes de ir para o próximo.
+        """
+        if visited is None:
+            visited = []
         visited.append(self)
         if self.children:
             for child in self.children:
-                child.depth_first_traversal(visited)
+                child.dft(visited)
         return visited
+        
+
 
 class Chave(TreeNode):
     """
@@ -152,12 +201,6 @@ class Chave(TreeNode):
         super().__init__(f"{sigla_simo.upper()}_{codigo}")
         self.sigla_simo = str(sigla_simo).upper()
         self.codigo = int(codigo)
-        self.ucs = RDC.loc[RDC["Chave"] == str(self)][
-            "Consumidores a jusante"
-        ].sum()
-        self.dic = self.lista_ocorrencias["DIC"].sum()
-        self.fic = self.lista_ocorrencias["QTDE UC EQPTO INTERROMPIDA"].sum()
-        self.ocorrencias = self.lista_ocorrencias.shape[0]
 
     def __str__(self):
         """
@@ -226,21 +269,31 @@ class Chave(TreeNode):
             & (OCORRENCIAS["EQPTO.RESPONSAVEL"] == self.codigo)
         ]
 
-    def set_dic(self, value : float = 0) -> float:
-        """
-        Altera o valor o DIC da chave.
-        """
-        if value >= 0:
-            self.dic = value
-            return
+    @property
+    def ucs(self):
+        return RDC.loc[RDC["Chave"] == str(self)][
+            "Consumidores a jusante"
+        ].sum()
+
+    @property
+    def dic(self):
+        return self.lista_ocorrencias["DIC"].sum()
         
-    def dic_futuro(self) -> float:
+    @property
+    def fic(self):
+        return self.lista_ocorrencias["QTDE UC EQPTO INTERROMPIDA"].sum()
+
+    @property
+    def qtd_ocorrencias(self):
+        return self.lista_ocorrencias.shape[0]
+    
+    @property
+    def dic_pos_rl(self) -> float:
         """
         Dic das ocorrencias referidas a chave vezes seu fator de redução
         """
         if self.tipo in ["RA", "TS"]:
             return self.dic
-
         dic = 0.0
         for row in self.lista_ocorrencias.itertuples():
             reducao = CAUSAS.loc[CAUSAS["CODIGO"] == getattr(row, "CAUSA")][
@@ -249,81 +302,33 @@ class Chave(TreeNode):
             dic += getattr(row, "DIC") * (1 - reducao)
         return dic
 
-    def set_fic(self, value) -> int:
+    def chaves_jusante(self):
         """
-        Altera o valor do FIC da chave. 
+        Encontra as chaves a jusante da referencia, excluindo as SEDs e suas chaves.
         """
-        if value >= 0:
-            self.fic = value
-            return
+        lista_objetos = self.dft()
+        for node in lista_objetos:
+            if isinstance(node, (Subestacao, Alimentador)):
+                for x in node.dft():
+                    lista_objetos.remove(x)
+        return lista_objetos
 
     def dic_acumulado(self) -> float:
         """
         Calcula o dic acumulado a jusante da chave (a partir dela até o final do ramo), somando o dic de cada chave.
         """
-        lista_dic = []
-        for node in self.depth_first_traversal():
-            if not isinstance(node, Chave):
-                continue
-            lista_dic.append(node.dic)
-        return round(sum(lista_dic), 2)
+        return sum([chave.dic for chave in self.chaves_jusante()])
 
-    def fic_acumuladro(self) -> float:
-        """
-        Calcula a soma de consumidores desligados a jusante da chave no periodo do relatório
-        """
-        lista_fic = []
-        for chave in self.chaves_jusante():
-            lista_fic.append(chave.fic())
 
-    def chaves_jusante(self):
-        """
-        Encontra as chaves a jusante da referencia, excluindo as SEDs e suas chaves.
-        """
-        lista_objetos = self.depth_first_traversal()
-        for obj in lista_objetos:
-            if isinstance(obj, (Subestacao, Alimentador)):
-                for x in obj.depth_first_traversal():
-                    lista_objetos.remove(x)
-        return lista_objetos
-
-    def dic_acumulado_futuro(self) -> float:
+    def dic_acumulado_pos_rl(self) -> float:
         """
         Calcula o dic acumulado após a substituição da chave por chave religadora. se a chave referencia já for do tipo religadora,
         então o dic acumulado mitigado será o mesmo que o dic acumulado.
-
         nessa função foi considerada uma sensibilidade de 3, ou seja, ela atuara caso a falta ocorra no trecho entre a chave de referencia e 3 chaves em cascata.
 
         """
-        lista_dic_mitigavel = []
-        queue = self.chaves_jusante()
-        visited = []
-
-        for node in queue:
-            if node in visited:
-                continue
-            if not isinstance(node, Chave):
-                """
-                Band-Aid, caso surja algum disjuntor de transformador ou algo do tipo, que ainda não consigo identificar no RHC
-                """
-                visited.append(node)
-                continue
-            if node.tipo in ["TS", "RA"]:
-                """
-                Adicionar a lista os valores integrais de dic das chaves a jusante da chave religadora, e de suas filhas, e removelas da lista.
-                """
-                lista_dic_mitigavel.append(node.dic_acumulado())
-                for item in node.chaves_jusante():
-                    visited.append(item)
-                continue
-            if (node.get_level() - self.get_level()) > 2:
-                lista_dic_mitigavel.append(node.dic)
-                # após o terceiro nivel, o valor do dic é o integral.
-                visited.append(node)
-                continue
-            lista_dic_mitigavel.append(node.dic_futuro())
-            visited.append(node)
-        return round(sum(lista_dic_mitigavel), 2)
+        return sum([chave.dic_pos_rl if (chave.get_level() - self.get_level()) < 2 else chave.dic for chave in self.chaves_jusante()])
+        
 
     def tempo_interrupcao(self) -> float:
         return self.lista_ocorrencias["DURACAO"].sum()
@@ -344,46 +349,26 @@ class Chave(TreeNode):
             )
         return tempo_total / 60
 
-    def ucs_jusante(self) -> int:
-        consumidores = RDC.loc[RDC["Chave"] == str(self)][
-            "Consumidores a jusante"
-        ].sum()
-        if consumidores:
-            return consumidores
-        consumidores = 0
-        for chave in self.chaves_jusante():
-            consumidores += RDC.loc[RDC["Chave"] == str(self)]["Consumidores a jusante"].sum()
-        return consumidores
-
     def ucs_entre(self, other) -> int:
+        self: Chave
+        other: Chave
         if self.get_level() > other.get_level():
-            return other.ucs_jusante() - self.ucs_jusante()
-        return self.ucs_jusante() - other.ucs_jusante()
+            return other.ucs - self.ucs
+        return self.ucs - other.ucs
 
-    def chaves_montante(self, *, to_root : bool = True) -> list:
-        nodes = self.get_heritage()
+    def chaves_montante(self) -> list:
         chaves_montante = []
         node: TreeNode
-        for node in nodes:
-            if isinstance(node, Alimentador) and not to_root:
-                return chaves_montante
-            if node.get_level() == 3:
-                return chaves_montante
+        for node in reversed(self.get_heritage()):
+            if isinstance(node, Alimentador):
+                return list(reversed(chaves_montante))
             chaves_montante.append(node)
         
-
     def dic_montante(self):
         """
         Somatório do dos dics das chaves a montande da chave de referencia.
         """
-        chave : Chave
-        dic_montante = 0.0
-        for chave in self.chaves_montante():
-            dic_montante += chave.dic
-        return dic_montante
-
-
-    # O Multiplicador de mitigacao no caso de transferencia de carga, não diz respeito ao tempo, mas sim a um dado estatistico
+        return sum([chave.dic for chave in self.chaves_montante()])
 
     def dic_ta(self, tipo = Literal["MITIGACAO TA MESMA SE", "MITIGACAO TA SE DIFERENTE"]):
         """
@@ -402,49 +387,29 @@ class Chave(TreeNode):
             ) * (chave.ucs_entre(self))
         return dic_ta
 
-    def get_nucleo(self) -> TreeNode:
-        for parent in self.get_heritage():
-            if isinstance(parent, Nucleo):
-                return parent
-
-    def get_subestacao(self) -> TreeNode:
-        for parent in self.get_heritage():
-            if isinstance(parent, Subestacao):
-                return parent
-
-
-    def get_alimentador(self) -> TreeNode:
+    def get_alimentador(self):
+        """
+        Retorna o Alimentador da Chave
+        """
         for parent in self.get_heritage():
             if isinstance(parent, Alimentador):
                 return parent
 
-    def dec(self) -> float:
-        alm: Alimentador = self.get_alimentador()
-        ucs_alm = alm.ucs()
-        if ucs_alm:
-            return round(self.dic / ucs_alm, 2)
-        return 0.00
+    def get_subestacao(self):
+        """
+        Retorna a SE da Chave
+        """
+        for parent in self.get_heritage():
+            if isinstance(parent, Subestacao):
+                return parent
 
-    def dec_futuro(self) -> float:
-        alm: Alimentador = self.get_alimentador()
-        ucs_alm = alm.ucs()
-        if ucs_alm:
-            return round(self.dic_futuro() / ucs_alm, 2)
-        return 0.00
-
-    def dec_acumulado(self) -> float:
-        alm: Alimentador = self.get_alimentador()
-        ucs_alm = alm.ucs()
-        if ucs_alm:
-            return round(self.dic_acumulado() / ucs_alm, 2)
-        return 0.00
-
-    def dec_acumulado_futuro(self) -> float:
-        alm: Alimentador = self.get_alimentador()
-        ucs_alm = alm.ucs()
-        if ucs_alm:
-            return round(self.dic_acumulado_futuro() / ucs_alm, 2)
-        return 0.00
+    def get_nucleo(self):
+        """
+        Retorna o Núcleo da Chave
+        """
+        for parent in self.get_heritage():
+            if isinstance(parent, Nucleo):
+                return parent
 
 
 class Alimentador(TreeNode):
@@ -463,28 +428,99 @@ class Alimentador(TreeNode):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.nome})"
 
+    @property
+    def lista_chaves(self):
+        """
+        Retorna todas as chaves do alimentador em ordem de nivel.
+        """
+        lista_chaves = []
+        child: Chave
+        for child in self.children:
+            lista_chaves.extend(child.chaves_jusante())
+        return lista_chaves
+
+    @property
     def ucs(self) -> int:
         """
-        Depende do relatórios de chaves estar atualizado.
+        Número de unidades consumidoras atendidas pelo Alimentador.
         """
-
-        chaves = self.get_children()
+        chaves = self.lista_chaves
         consumidores = 0
         for chave in chaves:
-            if isinstance(chave, Chave):
-                consumidores += chave.ucs_jusante()
+            consumidores += chave.ucs
         return consumidores
 
+    @property
     def dic(self) -> float:
-        chaves = self.get_children()
-        _dic = 0.0
-        for chave in chaves:
-            if isinstance(chave, Chave):
-                _dic += chave.dic_acumulado()
-        return _dic
+        """
+        Chi total do Alimentador
+        """
+        dic = 0.0
+        chave: Chave
+        for chave in self.children:
+            dic += chave.dic_acumulado()
+        return dic
 
+    @property
     def dec(self) -> float:
-        return self.dic() / self.ucs()
+        """
+        DEC do Alimentador. 
+        """
+        return self.dic / self.ucs
+
+    @property
+    def lista_chaves(self):
+        """
+        Retorna todas as chaves do alimentador em ordem de nivel.
+        """
+        lista_chaves = []
+        child: Chave
+        for child in self.children:
+            lista_chaves.extend(child.chaves_jusante())
+        return lista_chaves
+
+    @property
+    def qtd_chaves(self):
+        """
+        Retorna número de chaves do alimentador.
+        """
+        return len(self.lista_chaves)
+    
+    def chaves_candidatas_rl(self) -> list:
+        return
+
+    def chaves_candidatas_ts(self) -> list:
+        """
+        Retorna as chaves candidatas a subistituição por religador monofásico no Alimentador.
+        """
+        lista_candidatas = []
+        lista_chaves = self.lista_chaves
+        chave: Chave
+        # itera a partir das chaves mais distantantes em hierarquia da saida do alimentador
+        for chave in reversed(lista_chaves):
+            if not isinstance(chave, Chave):
+                continue
+                # Garante que as a lista tenha apenas chaves, sem nenhuma SED.
+            if chave.tipo in ["TS", "RA", "CD"]:
+                continue
+                # Descarta chaves que já são religadoras, ou que não podem ser substituidas por chave religadora
+            chaves_montante = chave.chaves_montante()
+            tipos_montante = [x.tipo for x in chaves_montante]
+            if "FU" in tipos_montante:
+                # Checa se existem chaves FU a jusante
+                # É possivel ganhar eficiencia removendo as chaves das lista de chaves do alimentador.
+                # Não consegui fazer isso ainda
+                for chave in reversed(chaves_montante):
+                    if chave.tipo == "FU":
+                       break
+                       # seleciona a chave fúsivel a montante.
+            if not chave.dic_acumulado():
+                continue
+                # Descarta chaves que não possuem CHI acumulado
+            lista_candidatas.append(chave) if chave not in lista_candidatas else None
+            # Adiciona a chave a lista se ela já não estiver na lista.
+        return lista_candidatas
+
 
 
 class Subestacao(TreeNode):
@@ -502,25 +538,47 @@ class Subestacao(TreeNode):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.nome})"
 
+    @property
     def ucs(self) -> int:
-        alimentadores = self.get_children()
+        """
+        Número de unidades consumidoras da SE.
+        """
+        alms = self.children
         consumidores = 0
-        for alimentador in alimentadores:
-            if isinstance(alimentador, Alimentador):
-                consumidores += alimentador.ucs()
+        alm : Alimentador
+        for alm in alms:
+            consumidores += alm.ucs
         return consumidores
 
+    @property
     def dic(self) -> float:
-        alimentadores = self.get_children()
-        _dic = 0.0
-        for alimentador in alimentadores:
-            if isinstance(alimentador, Alimentador):
-                _dic += alimentador.dic()
-        return _dic
+        """
+        DIC da SE.
+        """
+        alms = self.children
+        dic = 0.0
+        alm: Alimentador
+        for alm in alms:
+            dic += alm.dic
+        return dic
 
+    @property
     def dec(self) -> float:
-        return self.dic() / self.ucs()
+        """
+        DEC da SE.
+        """
+        return self.dic / self.ucs
 
+    def get_chaves_candidatas_ts(self) -> list:
+        """
+        Retorna lista de chaves candidatas para substituição substituição por RL Monofásico na SE. 
+        """
+
+        chaves_candidatas_ts = []
+        alm: Alimentador
+        for alm in self.children:
+            chaves_candidatas_ts.extend(alm.get_chaves_candidatas_ts())
+        return chaves_candidatas_ts
 
 class Nucleo(TreeNode):
     """
@@ -538,24 +596,6 @@ class Nucleo(TreeNode):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.nome})"
 
-    def ucs(self) -> int:
-        subestacoes = self.get_children()
-        consumidores = 0
-        for subestacao in subestacoes:
-            if isinstance(subestacao, Subestacao):
-                consumidores += subestacao.ucs()
-
-    def dic(self) -> float:
-        subestacoes = self.get_children()
-        _dic = 0.0
-        for subestacao in subestacoes:
-            if isinstance(subestacao, Subestacao):
-                _dic += subestacao.dic()
-        return _dic
-
-    def dec(self) -> float:
-        return self.dic() / self.ucs()
-
 
 class Empresa(TreeNode):
     def __init__(self, nome="CELESC"):
@@ -565,25 +605,6 @@ class Empresa(TreeNode):
     def __str__(self) -> str:
         return self.nome
 
-    def ucs(self) -> int:
-        nucleos = self.get_children()
-        consumidores = 0
-        for nucleo in nucleos:
-            if isinstance(nucleo, Nucleo):
-                if nucleo.ucs():
-                    consumidores += nucleo.ucs()
-        return consumidores
-
-    def dic(self) -> float:
-        nucleos = self.get_children()
-        _dic = 0.0
-        for nucleo in nucleos:
-            if isinstance(nucleo, Nucleo):
-                _dic += nucleo.dic()
-        return _dic
-
-    def dec(self) -> float:
-        return self.dic() / self.ucs()
 
 
 def CriarRede() -> Empresa:
