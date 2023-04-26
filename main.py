@@ -6,7 +6,7 @@
 import os
 import pandas as pd
 from src._database import importar_arquivos, OCORRENCIAS
-from src._dataclasses import CriarRede, Subestacao, Alimentador, Chave
+from src._dataclasses import CriarRede, Empresa, Nucleo, Subestacao, Alimentador, Chave
 
 CELESC = None
 
@@ -29,90 +29,157 @@ def continuar():
     entry = input().upper()
     return entry
 
-
 def por_chave(chave: Chave):
-    dic_acumulado = chave.dic_acumulado()
-    dic_acumulado_pos_rl = chave.dic_acumulado_pos_rl()
-    reducao_dic_acumulado = (
-        round(100 * (1 - dic_acumulado_pos_rl / dic_acumulado), 2)
-        if dic_acumulado
-        else "NA"
-    )
-    chaves_nf = pd.DataFrame({
-        "Núcleo / Unidade": str(chave.get_nucleo()),
-        "Subestação": str(chave.get_subestacao()),
-        "Alimentador": str(chave.get_alimentador()),
-        "Chave": chave,
-        "Unidade Consumidoras": chave.ucs,
-        "DIC Chave [h*ucs]": chave.dic,
-        "DIC Acumulado [h * ucs]": dic_acumulado,
-        "DIC Estimado após substituição [h * ucs]": chave.dic_pos_rl,
-        "DIC Acumulado estimado pós substituição [h * ucs]": dic_acumulado_pos_rl,
-        "Redução DIC Acumulado estimada [%]": reducao_dic_acumulado,
-    }, index = ['0'])
+    dic_jusante = chave.dic_jusante()
+    dic_jusante_pos_rl = chave.dic_jusante_pos_rl()
 
-    print(chaves_nf.tail(1).transpose().to_string(header=None))
-    if not os.path.exists("Estudo Ganho RLs NF.xlsx"):
-        pd.DataFrame().to_excel("Estudo Ganho RLs NF.xlsx", index=False)
-    with pd.ExcelWriter("Estudo Ganho RLs NF.xlsx", engine='openpyxl', mode='a', if_sheet_exists='overlay') as writer:
-        chaves_nf.to_excel(writer, index=False , sheet_name= "Estudo por Chave", startrow=writer.sheets["Estudo por Chave"].max_row, header= None)
+    reducao_dic_jusante = dic_jusante - dic_jusante_pos_rl
+    reducao_dic_jusante_p = (reducao_dic_jusante / dic_jusante
+        if dic_jusante
+        else 0
+    )
+    dic_montante = chave.dic_montante()
+    dic_montante_pos_ta = chave.dic_montante_pos_ta()
+    reducao_dic_montante = dic_montante - dic_montante_pos_ta
+    reducao_dic_montante_p = reducao_dic_montante/dic_montante if dic_montante != 0 else 0
+
+
+    chaves_nf = pd.DataFrame({
+        "Núcleo / Unidade": str(chave.nucleo),
+        "SE": str(chave.subestacao),
+        "Alimentador": str(chave.alimentador),
+        "Chave": chave,
+        "Tipo": chave.tipo,
+        "UCs": chave.ucs,
+        "CHI Chave [h*ucs]": chave.dic,
+        "CHI estimado após substituição [h * ucs]": chave.dic_pos_rl,
+        "CHI Jusante Acumulado [h * ucs]": dic_jusante,
+        "CHI Jusante Acumulado estimado após substituição [h * ucs]": dic_jusante_pos_rl,
+        "Redução CHI Jusante Acumulado estimada [%]": reducao_dic_jusante_p,
+        "CHI Montante Acumulado [h * ucs]": dic_montante,
+        "CHI Montante Acumulado estimado após TA [h * ucs]": dic_montante_pos_ta,
+        "Redução CHI Montante Acumulado estimado [%]": reducao_dic_montante_p,
+        "Redução Total [h * ucs]": reducao_dic_jusante + reducao_dic_montante},
+        index = ['0'])
+
+    print(chaves_nf.tail(1).transpose().to_string(columns = chaves_nf.columns.to_list().remove('Chave'), header=None))
+    with pd.ExcelWriter("Estudo.xlsx", engine='openpyxl', mode='a', if_sheet_exists='overlay') as writer:
+        chaves_nf.to_excel(writer, index=False, sheet_name="Estudo por Chave", startrow=writer.sheets["Estudo por Chave"].max_row, header=None)
     return
 
 def por_alimentador(alm : Alimentador):
     print("Calculando valores, isso pode levar alguns segundos", end= "\r")
-    df = pd.DataFrame(alm.get_chaves_candidatas_ts(), columns= ["Chave"])
+    df = pd.DataFrame(alm.chaves_candidatas(), columns= ["Chave"])
     ucs = alm.ucs
-    df["Redução DEC estimada [HI]"] = df["Chave"].apply(lambda x: (x.dic - x.dic_pos_rl)/ucs)
-    df["Interrupções no periodo"] = df["Chave"].apply(lambda x: x.qtd_ocorrencias)
+    df["Tipo"] = df["Chave"].apply(lambda x: x.tipo)
+    df["Redução DEC a jusante estimada [HI]"] = df["Chave"].apply(lambda x: (x.dic_jusante() - x.dic_jusante_pos_rl())/ucs)
+    df["Redução DEC a montante estimada [HI]"] = df["Chave"].apply(lambda x: (x.dic_montante() - x.dic_montante_pos_ta())/ucs)
+    df["Redução DEC total estimada [HI]"] = df["Redução DEC a jusante estimada [HI]"] + df["Redução DEC a montante estimada [HI]"]
+    df["Interrupções chave"] = df["Chave"].apply(lambda x: x.qtd_ocorrencias)
     df["Unidades consumidoras a jusante da Chave"] = df["Chave"].apply(lambda x: x.ucs)
-    df = df[(df["Redução DEC estimada [HI]"]) != 0]
-
+    df = df[(df["Redução DEC total estimada [HI]"]) != 0]
     if df.empty:
-        print("Nenhuma chave encontrada para substituição!")
-
-    df.sort_values(["Redução DEC estimada [HI]",
-                    "Unidades consumidoras a jusante da Chave"], inplace=True, ascending=False)
-
-    print(f"Unidades Consumidoras {alm}: {ucs}")
+        print("Nenhuma chave encontrada para substituição!       ")
+    print(f"Unidades Consumidoras {alm}: {ucs}                   ")
+    df.sort_values("Redução DEC total estimada [HI]", inplace= True, ascending= False)
     print(df.to_string(index=False)) if not df.empty else None
-
-    if not os.path.exists("Estudo Ganho RLs NF.xlsx"):
-        pd.DataFrame().to_excel("Estudo Ganho RLs NF.xlsx", index=False)
-
-    with pd.ExcelWriter("Estudo Ganho RLs NF.xlsx", engine = 'openpyxl', mode = 'a', if_sheet_exists='replace') as writer:
+    if alm.SED:
+        print(f"Atenção SED {alm.SED} no Alimentador!")
+    if not os.path.exists("Estudo.xlsx"):
+        pd.DataFrame().to_excel("Estudo.xlsx", index=False)
+    with pd.ExcelWriter("Estudo.xlsx", engine = 'openpyxl', mode = 'a', if_sheet_exists='replace') as writer:
         df.to_excel(writer, index=False, sheet_name=f'Estudo Aliementador {str(alm)}')
     return
 
 def por_subestacao(se: Subestacao):
     print("Calculando. Este processo pode levar alguns minutos.", end = '\r')
-    df = pd.DataFrame(se.get_chaves_candidatas_ts(), columns= ["Chave"])
+    df = pd.DataFrame(se.chaves_candidatas(), columns= ["Chave"])
     ucs = se.ucs
-    df["Alimentador"] = df["Chave"].apply(lambda x: x.get_alimentador())
-    df = df[["Alimentador", "Chave"]]
-    df["Redução DEC SE estimada [HI]"] = df.apply(lambda x:  (x["Chave"].dic - x["Chave"].dic_pos_rl)/ucs, axis=1)
-    df["Redução DEC Alimentador estimada [HI]"] = df.apply(lambda x: (
-        x["Chave"].dic - x["Chave"].dic_pos_rl)/x["Alimentador"].ucs, axis=1)
+
+    df["Alimentador"] = df["Chave"].apply(lambda x: x.alimentador)
+    df = df[["Alimentador", "Chave"]]   
+    df["Tipo"] = df["Chave"].apply(lambda x: x.tipo)
+    df["Redução DEC estimada a jusante  [HI]"] = df.apply(lambda x:  (
+        x["Chave"].dic_jusante() - x["Chave"].dic_jusante_pos_rl())/ucs, axis=1)
+    df["Redução DEC estimada a montante [HI]"] = df.apply(lambda x: (x["Chave"].dic_montante() - x["Chave"].dic_montante_pos_ta())/ucs, axis = 1)
+    df["Redução DEC total estimada [HI]"] = df.apply(lambda x: x["Redução DEC estimada a jusante  [HI]"] + x["Redução DEC estimada a montante [HI]"], axis= 1)
     df["Interrupções"] = df["Chave"].apply(lambda x: x.qtd_ocorrencias)
     df["UCs a jusante da Chave"] = df["Chave"].apply(lambda x: x.ucs)
-    df = df[df["Redução DEC Alimentador estimada [HI]"] != 0]
+    df = df[df["Redução DEC total estimada [HI]"] != 0]
     if df.empty:
         print("Nenhuma chave encontrada para substituição!")
-    df.sort_values(["Redução DEC SE estimada [HI]",], inplace=True, ascending=False)
-    print(f"Unidades Consumidoras {se}: {ucs}")
+    df.sort_values(["Redução DEC total estimada [HI]"], inplace=True, ascending=False)
+    print(f"Unidades Consumidoras {se}: {ucs}                    ")
     print(df.to_string(index=False)) if not df.empty else None
 
-    if not os.path.exists("Estudo Ganho RLs NF.xlsx"):
-        pd.DataFrame().to_excel("Estudo Ganho RLs NF.xlsx", index=False)
-
-    with pd.ExcelWriter("Estudo Ganho RLs NF.xlsx", engine= 'openpyxl', mode = 'a', if_sheet_exists= 'replace') as writer:
+    with pd.ExcelWriter("Estudo.xlsx", engine= 'openpyxl', mode = 'a', if_sheet_exists= 'replace') as writer:
         df.to_excel(writer, index=False, sheet_name=f'Estudo Subestação {str(se)}')
     return
 
-def estudo_ganho_rls_nf():
+def por_nucleo(nu: Nucleo):
+    print("Calculando. Este processo pode levar alguns minutos.", end = "\r")
+    df = pd.DataFrame(nu.chaves_candidatas(), columns= ["Chave"])
+    ucs = nu.ucs
+    df["Substação"] = df["Chave"].apply(lambda x: x.subestacao)
+    df["Alimentador"] = df["Chave"].apply(lambda x: x.alimentador)
+    df = df[["Subestação", "Alimentador", "Chave"]]
+    df["Tipo"] = df["Chave"].apply(lambda x : x.tipo)
+    df["Redução DEC estimada a jusante  [HI]"] = df.apply(lambda x:  (
+        x["Chave"].dic_jusante() - x["Chave"].dic_jusante_pos_rl())/ucs, axis=1)
+    df["Redução DEC estimada a montante [HI]"] = df.apply(lambda x: (
+        x["Chave"].dic_montante() - x["Chave"].dic_montante_pos_ta())/ucs, axis=1)
+    df["Redução DEC total estimada [HI]"] = df.apply(
+        lambda x: x["Redução DEC estimada a jusante  [HI]"] + x["Redução DEC estimada a montante [HI]"], axis=1)
+    df["Interrupções"] = df["Chave"].apply(lambda x: x.qtd_ocorrencias)
+    df["UCs a jusante da Chave"] = df["Chave"].apply(lambda x: x.ucs)
+    df = df[df["Redução DEC total estimada [HI]"] != 0]
+    if df.empty:
+        print("Nenhuma chave encontrada para o núcleo!")
+    df.sort_values(["Redução DEC total estimada [HI]"],
+                   inplace=True, ascending=False)
+    print(f"Unidades Consumidoras {nu}: {ucs}                    ")
+    print(df.to_string(index=False)) if not df.empty else None
+    with pd.ExcelWriter("Estudo.xlsx", engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+        df.to_excel(writer, index=False,
+                    sheet_name=f'Estudo Núcleo {str(nu)}')
+    return
+
+def empresa():
+    print("Calculando. Este processo pode levar alguns minutos.", end="\r")
+    df = pd.DataFrame(CELESC.chaves_candidatas(), columns= ["Chave"])
+    ucs = CELESC.ucs
+    df["Núcleo"] = df["Chave"].apply(lambda x: x.nucleo)
+    df["Subestação"] = df["Chave"].apply(lambda x: x.subestacao)
+    df["Alimentador"] = df["Chave"].apply(lambda x: x.alimentador)
+    df = df[["Núcleo", "Subestação", "Alimentador", "Chave"]]
+    df["Tipo"] = df["Chave"].apply(lambda x: x.tipo)
+    df["Redução DEC estimada a jusante  [HI]"] = df.apply(lambda x:  (
+        x["Chave"].dic_jusante() - x["Chave"].dic_jusante_pos_rl())/ucs, axis=1)
+    df["Redução DEC estimada a montante [HI]"] = df.apply(lambda x: (
+        x["Chave"].dic_montante() - x["Chave"].dic_montante_pos_ta())/ucs, axis=1)
+    df["Redução DEC total estimada [HI]"] = df.apply(
+        lambda x: x["Redução DEC estimada a jusante  [HI]"] + x["Redução DEC estimada a montante [HI]"], axis=1)
+    df["Interrupções"] = df["Chave"].apply(lambda x: x.qtd_ocorrencias)
+    df["UCs a jusante da Chave"] = df["Chave"].apply(lambda x: x.ucs)
+    df = df[df["Redução DEC total estimada [HI]"] != 0]
+    if df.empty:
+        print("Nenhuma chave encontrada para o núcleo!")
+    df.sort_values(["Redução DEC total estimada [HI]"],
+                   inplace=True, ascending=False)
+    print(f"Unidades Consumidoras {CELESC}: {ucs}                    ")
+    print(df.to_string(index=False)) if not df.empty else None
+    with pd.ExcelWriter("Estudo.xlsx", engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+        df.to_excel(writer, index=False,
+                    sheet_name=f'Estudo CELESC')
+    return
+
+def esudo_geral():
     """
-    Gerenciador de estudos RL NF
+    Gerenciador de estudos gerais.
     """
-    print('Estudo Ganho RL NF:\nEntre com uma Chave, Alimentador, ou SE para começar a análise.\nPara voltar pressione "Enter"')
+    print('Estudo geral visa encontrar candidatas para substituição por religadora.')
+    print('A redução do CHI a montante é calculada para cada chave usando TA dentro da mesma SE.')
+    print('Entre com uma Chave, Alimentador, ou SE para começar a análise.\nPara voltar pressione "Enter"')
     entry = filtro(input().upper())
     while True:
         if not entry:
@@ -126,30 +193,25 @@ def estudo_ganho_rls_nf():
         if entry.__class__.__name__ == "Subestacao":
             por_subestacao(entry)
 
+        if entry.__class__.__name__ == "Nucleo":
+            por_nucleo(entry)
+
+        if entry.__class__.__name__ == "Empresa":
+            empresa()
+
         print(f"Estudo de {entry} Finalizado!")
         print('Entre com outro objeto para continuar, ou "Enter" para voltar')
         entry = filtro(input().upper())
 
-
-# TODO:
-def estudo_transferencia_automatica():
-    """
-    Gerenciador de esutdos RL TA
-    """
-    print('Estudo Ganho RL TA:')
-
-    return
-
-
-def selecionar_estudo():
+def selecionar_funcao():
     global CELESC
-    message = "1 - Atualizar Rede\t2 - Estudo Ganho RLs NF.\t3 - Estudo Ganho RLs TA.\tx - Sair"
+    message = "1 - Atualizar Rede\t2 - Estudo.\tx - Sair"
     print(message)
     estudo = input().upper()
     while True:
         if estudo not in ["1", "2", "3", "X"]:
             print("Entre com 1, 2, 3, ou X")
-            estudo = input("-> ").upper()
+            estudo = input().upper()
 
         if estudo == "1":
             importar_arquivos()
@@ -168,18 +230,27 @@ def selecionar_estudo():
                 print("Criando Rede:")
                 CELESC = CriarRede()
                 print("Rede criada!")
-            estudo_ganho_rls_nf()
+            if not os.path.exists("Estudo.xlsx"):
+                pd.DataFrame(columns=["Núcleo / Unidade",
+                    "SE",
+                    "Alimentador",
+                    "Chave", 
+                    "Tipo", 
+                    "CHI Chave [h*ucs]", 
+                    "CHI estimado após substituição [h * ucs]", 
+                    "CHI Jusante Acumulado [h * ucs]", 
+                    "CHI Jusante Acumulado estimado após substituição [h * ucs]", 
+                    "Redução CHI Jusante Acumulado estimada [%]", 
+                    "CHI Montante Acumulado [h * ucs]", 
+                    "CHI Montante Acumulado estimado após TA [h * ucs]", 
+                    "Redução CHI Montante Acumulado estimado [%]", 
+                    "Redução Total [h * ucs]"]).to_excel("Estudo.xlsx",
+                                index=False, sheet_name="Estudo por Chave")
+            esudo_geral()
             print(message)
             estudo = input().upper()
 
-        if estudo == "3":
-            if CELESC is None:
-                print("Criando Rede:")
-                CELESC = CriarRede()
-                print("Rede criada!")
-            estudo_transferencia_automatica()
-            print(message)
-            estudo = input().upper()
+
 
         if estudo == "X":
             exit()
@@ -190,7 +261,7 @@ def mainloop():
     print(f'Periodo do relatório 1025: {OCORRENCIAS["DATA INICIO"].min() + " - " + OCORRENCIAS["DATA FIM"].max()}')
     print("Selecione a função:")
     while True:
-        selecionar_estudo()
+        selecionar_funcao()
 
 
 if __name__ == "__main__":
