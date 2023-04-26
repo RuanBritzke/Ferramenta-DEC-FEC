@@ -476,9 +476,9 @@ class Alimentador(TreeNode):
             if chave.tipo in ["TS", "RA"]:
                 continue
                 # Descarta chaves que já são religadoras, ou que não podem ser substituidas por chave religadora
-            if chave.tipo == "FU":
-                for x in chave.chaves_jusante():
-                    chaves.remove(x) if x in chaves else None
+            if chave.tipo == "FU" and chave.parent.tipo == "FU":
+                continue
+                # Descarta Ramais
             candidatas.append(
                 chave) if chave not in candidatas else None
             # Adiciona a chave a lista se ela já não estiver na lista.
