@@ -30,7 +30,7 @@ Funcionalidades Futuras:
     - redução dec ta
     - redução dec nf
 
-- Estudo especifico (Chave, Alimentador, SE)
+- Estudo especifico (Chave, Alimentador, SE)\
     Chave:
     - Mostrar Ganho NF
     - Selecionar TA (Ida e volta, somente Ida)
