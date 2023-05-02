@@ -20,6 +20,13 @@ from src._database import (
 
 RDC_TIPOS: Dict[str, str] = dict(RDC[["Chave", "Tipo"]].values)
 
+SECCIONADORA = 'CD'
+FUSIVEL = 'FU'
+RELIGADOR_AUTOMATICO = 'RA'
+TRIP_SAVER = 'TS'
+
+
+
 class TreeNode:
     """
     TreeNode of Tree object:
@@ -136,8 +143,9 @@ class TreeNode:
                 return found
         return None
 
-    def dft(self, visited = None): # Depth First Traversal
+    def depth_first_traversal(self, visited = None):
         """
+        Travessia em profundidade primeiro.
         Retorna todos os nó a jusante do nó de referência,
         percorrendo toda a profundidade do ramo antes de ir
         para o próximo.
@@ -147,7 +155,7 @@ class TreeNode:
         visited.append(self)
         if self.children:
             for child in self.children:
-                child.dft(visited)
+                child.depth_first_traversal(visited)
         return visited
 
     def bft(self):
@@ -194,13 +202,13 @@ class Chave(TreeNode):
         except Exception:
 
             if 1 <= codigo < 200 or 300 <= codigo < 500 or 800 <= codigo < 3000 or 83000 <= codigo < 85000 or 85200 <= codigo < 86000:
-                return "CD"
+                return SECCIONADORA
             elif 200 <= codigo < 300 or 3000 <= codigo <  82000 or 87000 <= codigo < 89000 or 85000 <= codigo < 86500:
-                return "FU"
+                return FUSIVEL
             elif 500 <= codigo < 800 or 82000 <= codigo < 83000  or 86500 <= codigo < 87000:
-                return "RA"
+                return RELIGADOR_AUTOMATICO
             elif 89000 <= codigo < 100000:
-                return "TS"
+                return TRIP_SAVER
             else:
                 raise ValueError(
                     f"códgio {codigo} está fora da faixa numérica expecificada pelo Manual de Procedimentos"
@@ -265,7 +273,7 @@ class Chave(TreeNode):
         """
         Dic das ocorrencias referidas a chave vezes seu fator de redução
         """
-        if self.tipo in ["RA", "TS"]:
+        if self.tipo in [RELIGADOR_AUTOMATICO, TRIP_SAVER]:
             return self.dic
         dic = 0.0
         for row in self.ocorrencias.itertuples():
@@ -279,10 +287,10 @@ class Chave(TreeNode):
         """
         Encontra as chaves a jusante da referencia, excluindo as SEDs e suas chaves.
         """
-        lista_objetos = self.dft()
+        lista_objetos = self.depth_first_traversal()
         for node in lista_objetos:
             if isinstance(node, (Subestacao, Alimentador)):
-                for x in node.dft():
+                for x in node.depth_first_traversal():
                     lista_objetos.remove(x)
         return lista_objetos
 
@@ -357,7 +365,7 @@ class Chave(TreeNode):
         """
         Retorna o Alimentador da Chave
         """
-        for parent in self.heritage():
+        for parent in reversed(self.heritage()):
             if isinstance(parent, Alimentador):
                 return parent
 
@@ -366,7 +374,7 @@ class Chave(TreeNode):
         """
         Retorna a SE da Chave
         """
-        for parent in self.heritage():
+        for parent in reversed(self.heritage()):
             if isinstance(parent, Subestacao):
                 return parent
 
@@ -397,7 +405,7 @@ class Alimentador(TreeNode):
 
     @property
     def SED(self):
-        for x in self.dft():
+        for x in self.depth_first_traversal():
             if x.__class__.__name__ == "Subestacao":
                 return x
         return None
@@ -473,10 +481,10 @@ class Alimentador(TreeNode):
             if not isinstance(chave, Chave):
                 continue
                 # Garante que as a lista tenha apenas chaves, sem nenhuma SED.
-            if chave.tipo in ["TS", "RA"]:
+            if chave.tipo in [RELIGADOR_AUTOMATICO, TRIP_SAVER]:
                 continue
                 # Descarta chaves que já são religadoras, ou que não podem ser substituidas por chave religadora
-            if chave.tipo == "FU" and chave.parent.tipo == "FU":
+            if chave.tipo == FUSIVEL and chave.parent.tipo == FUSIVEL:
                 continue
                 # Descarta Ramais
             candidatas.append(
@@ -579,7 +587,7 @@ class Nucleo(TreeNode):
     @property
     def subestacoes(self):
         subestacoes = []
-        for node in self.dft():
+        for node in self.depth_first_traversal():
             subestacoes.append(node) if isinstance(node, Subestacao) and node.children else None
         return subestacoes
 
@@ -644,7 +652,7 @@ class Empresa(TreeNode):
     @property
     def nucleos(self):
         nucleos = []
-        for node in self.dft():
+        for node in self.depth_first_traversal():
             nucleos.append(node) if isinstance(node, Nucleo) and node.children else None
         return nucleos
 

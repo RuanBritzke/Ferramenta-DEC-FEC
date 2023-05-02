@@ -8,6 +8,9 @@ import pandas as pd
 from src._database import importar_arquivos, OCORRENCIAS
 from src._dataclasses import CriarRede, Empresa, Nucleo, Subestacao, Alimentador, Chave
 
+
+decimal = lambda n: float("{:.2f}".format(n))
+
 CELESC = None
 
 def filtro(entry: str):
@@ -51,15 +54,15 @@ def por_chave(chave: Chave):
         "Chave": chave,
         "Tipo": chave.tipo,
         "UCs": chave.ucs,
-        "CHI Chave [h*ucs]": chave.dic,
-        "CHI estimado após substituição [h * ucs]": chave.dic_pos_rl,
-        "CHI Jusante Acumulado [h * ucs]": dic_jusante,
-        "CHI Jusante Acumulado estimado após substituição [h * ucs]": dic_jusante_pos_rl,
-        "Redução CHI Jusante Acumulado estimada [%]": reducao_dic_jusante_p,
-        "CHI Montante Acumulado [h * ucs]": dic_montante,
-        "CHI Montante Acumulado estimado após TA [h * ucs]": dic_montante_pos_ta,
-        "Redução CHI Montante Acumulado estimado [%]": reducao_dic_montante_p,
-        "Redução Total [h * ucs]": reducao_dic_jusante + reducao_dic_montante},
+        "CHI Chave [h*ucs]": decimal(chave.dic),
+        "CHI estimado após substituição [h * ucs]": decimal(chave.dic_pos_rl),
+        "CHI Jusante Acumulado [h * ucs]": decimal(dic_jusante),
+        "CHI Jusante Acumulado estimado após substituição [h * ucs]": decimal(dic_jusante_pos_rl),
+        "Redução CHI Jusante Acumulado estimada [%]": decimal(100*reducao_dic_jusante_p),
+        "CHI Montante Acumulado [h * ucs]": decimal(dic_montante),
+        "CHI Montante Acumulado estimado após TA [h * ucs]": decimal(dic_montante_pos_ta),
+        "Redução CHI Montante Acumulado estimado [%]": decimal(100*reducao_dic_montante_p),
+        "Redução Total [h * ucs]": decimal(reducao_dic_jusante + reducao_dic_montante)},
         index = ['0'])
 
     print(chaves_nf.tail(1).transpose().to_string(columns = chaves_nf.columns.to_list().remove('Chave'), header=None))
@@ -72,17 +75,20 @@ def por_alimentador(alm : Alimentador):
     df = pd.DataFrame(alm.chaves_candidatas(), columns= ["Chave"])
     ucs = alm.ucs
     df["Tipo"] = df["Chave"].apply(lambda x: x.tipo)
-    df["Redução DEC a jusante estimada [HI]"] = df["Chave"].apply(lambda x: (x.dic_jusante() - x.dic_jusante_pos_rl())/ucs)
-    df["Redução DEC a montante estimada [HI]"] = df["Chave"].apply(lambda x: (x.dic_montante() - x.dic_montante_pos_ta())/ucs)
-    df["Redução DEC total estimada [HI]"] = df["Redução DEC a jusante estimada [HI]"] + df["Redução DEC a montante estimada [HI]"]
+    df["Redução CHI a jusante estimada"] = df["Chave"].apply(lambda x: decimal((x.dic_jusante() - x.dic_jusante_pos_rl())))
+    df["Redução CHI a montante estimada"] = df["Chave"].apply(lambda x: decimal(x.dic_montante() - x.dic_montante_pos_ta()))
+    df["Redução CHI total estimada"] = df["Redução CHI a jusante estimada"] + \
+        df["Redução CHI a montante estimada"]
     df["Interrupções chave"] = df["Chave"].apply(lambda x: x.qtd_ocorrencias)
+    df["Interrupções a jusante"] = df["Chave"].apply(lambda x: len(x.ocorrencias_jusante))
     df["Unidades consumidoras a jusante da Chave"] = df["Chave"].apply(lambda x: x.ucs)
-    df = df[(df["Redução DEC total estimada [HI]"]) != 0]
+    df["Unidades consumidoras do Alimentador"] = ucs
+    df = df[(df["Redução CHI total estimada"]) != 0]
     if df.empty:
         print("Nenhuma chave encontrada para substituição!       ")
     print(f"Unidades Consumidoras {alm}: {ucs}                   ")
-    df.sort_values("Redução DEC total estimada [HI]", inplace= True, ascending= False)
-    print(df.to_string(index=False)) if not df.empty else None
+    df.sort_values("Redução CHI total estimada", inplace= True, ascending= False)
+    print(df.head(10).to_string(index=False)) if not df.empty else None
     if alm.SED:
         print(f"Atenção SED {alm.SED} no Alimentador!")
     if not os.path.exists("Estudo.xlsx"):
@@ -99,18 +105,18 @@ def por_subestacao(se: Subestacao):
     df["Alimentador"] = df["Chave"].apply(lambda x: x.alimentador)
     df = df[["Alimentador", "Chave"]]   
     df["Tipo"] = df["Chave"].apply(lambda x: x.tipo)
-    df["Redução DEC estimada a jusante  [HI]"] = df.apply(lambda x:  (
-        x["Chave"].dic_jusante() - x["Chave"].dic_jusante_pos_rl())/ucs, axis=1)
-    df["Redução DEC estimada a montante [HI]"] = df.apply(lambda x: (x["Chave"].dic_montante() - x["Chave"].dic_montante_pos_ta())/ucs, axis = 1)
-    df["Redução DEC total estimada [HI]"] = df.apply(lambda x: x["Redução DEC estimada a jusante  [HI]"] + x["Redução DEC estimada a montante [HI]"], axis= 1)
+    df["Redução CHI estimada a jusante"] = df.apply(lambda x:  decimal(
+        x["Chave"].dic_jusante() - x["Chave"].dic_jusante_pos_rl()), axis=1)
+    df["Redução CHI estimada a montante"] = df.apply(lambda x: decimal(x["Chave"].dic_montante() - x["Chave"].dic_montante_pos_ta()), axis = 1)
+    df["Redução CHI total estimada"] = df.apply(lambda x: x["Redução CHI estimada a jusante"] + x["Redução CHI estimada a montante"], axis= 1)
     df["Interrupções"] = df["Chave"].apply(lambda x: x.qtd_ocorrencias)
     df["UCs a jusante da Chave"] = df["Chave"].apply(lambda x: x.ucs)
-    df = df[df["Redução DEC total estimada [HI]"] != 0]
+    df = df[df["Redução DEC total estimada"] != 0]
     if df.empty:
         print("Nenhuma chave encontrada para substituição!")
-    df.sort_values(["Redução DEC total estimada [HI]"], inplace=True, ascending=False)
+    df.sort_values(["Redução CHI total estimada"], inplace=True, ascending=False)
     print(f"Unidades Consumidoras {se}: {ucs}                    ")
-    print(df.to_string(index=False)) if not df.empty else None
+    print(df.head(10).to_string(index=False)) if not df.empty else None
 
     with pd.ExcelWriter("Estudo.xlsx", engine= 'openpyxl', mode = 'a', if_sheet_exists= 'replace') as writer:
         df.to_excel(writer, index=False, sheet_name=f'Estudo Subestação {str(se)}')
@@ -138,7 +144,7 @@ def por_nucleo(nu: Nucleo):
     df.sort_values(["Redução DEC total estimada [HI]"],
                    inplace=True, ascending=False)
     print(f"Unidades Consumidoras {nu}: {ucs}                    ")
-    print(df.to_string(index=False)) if not df.empty else None
+    print(df.head(20).to_string(index=False)) if not df.empty else None
     with pd.ExcelWriter("Estudo.xlsx", engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
         df.to_excel(writer, index=False,
                     sheet_name=f'Estudo Núcleo {str(nu)}')
